@@ -1,5 +1,8 @@
 import argparse
 import pathlib
+import requests
+from urllib.parse import ParseResult, urlparse
+import re
 
 HEADER = '''
 ███████ ██████  ██ ██████  ███████ ██████
@@ -18,6 +21,24 @@ Parser = argparse.ArgumentParser
 # ---------------------------
 # Argument parsing
 # ---------------------------
+def check_url(url: str) -> None:
+    print(url)
+    result: ParseResult = urlparse(url)
+    if not result.scheme or not result.netloc:
+        raise Exception()
+    if result.scheme != 'http':
+        raise Exception()
+
+def validate_url(args: Args) -> None:
+    try:
+        check_url(args.URL)
+    except Exception:
+        if not re.match('^[a-z]*://', args.URL):
+            args.URL = 'http://' + args.URL
+            validate_url(args)
+        else:
+            raise Exception(f'{args.URL}: invalid URL')
+
 def parse_args() -> Args:
     parser: Parser = Parser(description = 'An image scrapper')
     parser.add_argument('-r', '--recursive', action = 'store_true', help = 'download images recursively (to depth level 5 by default)')
@@ -36,8 +57,26 @@ def parse_args() -> Args:
 # ---------------------------
 # Execution
 # ---------------------------
-def crawl() -> None:
-    print("Ready to crawl")
+def crawl(args: Args) -> None:
+    try:
+        validate_url(args)
+        res = requests.get(args.URL, headers={"User-Agent":"Mozilla/5.0"}, timeout = 1)
+        print(type(res))
+        print(res.status_code)
+        res.raise_for_status()
+        if res.status_code != 200:
+            print(f'spider.py: error: cannot access URL (HTTP response {res.status_code})')
+        print("Ready to crawl")
+    except requests.exceptions.HTTPError as e:
+        print(f'spider.py: HTTP error: {e}')
+    except requests.exceptions.ConnectionError as e:
+        print(f'spider.py: Connection error: {e}')
+    except requests.exceptions.Timeout as e:
+        print(f'spider.py: Timeout error: {e}')
+    except requests.exceptions.RequestException as e:
+        print(f'spider.py: Fatal error: {e}')
+    except Exception as e:
+        print(f'spider.py: error: {e}')
 
 # ---------------------------
 # Prettify
@@ -53,6 +92,7 @@ def main() -> None:
     print_header()
     args : Args = parse_args()
     print(args)
+    crawl(args)
 
 if __name__ == '__main__':
     main()
