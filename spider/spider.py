@@ -57,6 +57,12 @@ def print_downloading_header(url: str, depth: int) -> None:
     print(f'[Depth: {depth}] Downloading images from: {url}')
     print('{:-^80}'.format(''))
 
+def print_total_downloaded(args: Args, download_count: int) -> None:
+    print('')
+    print('{:-^80}'.format(''))
+    print(f'TOTAL: {download_count} images downloaded from {args.URL}')
+    print('{:-^80}'.format(''))
+
 # ---------------------------
 # Argument parsing
 # ---------------------------
@@ -158,6 +164,7 @@ def scrape(args: Args) -> None:
         create_save_directory(args)
         print(f'{color.SUCCESS}Save directory OK: {args.path.resolve()}{color.RESET}')
         download_count += download_images_from_url(args, args.URL)
+        print_total_downloaded(args, download_count)
     except Exception as e:
         print(f'{color.ERROR}spider.py: error: {e}{color.RESET}')
 
