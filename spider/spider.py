@@ -1,10 +1,10 @@
 import argparse
-import pathlib
-import requests
-from urllib.parse import ParseResult, urlparse
-import re
 import os
+import pathlib
+import re
+import requests
 from bs4 import BeautifulSoup, ResultSet
+from urllib.parse import ParseResult, urlparse
 
 HEADER = '''
 ███████ ██████  ██ ██████  ███████ ██████
@@ -62,20 +62,22 @@ def print_downloading_header(url: str, depth: int) -> None:
 # ---------------------------
 def check_url(url: str) -> None:
     result: ParseResult = urlparse(url)
-    if not result.scheme or not result.netloc:
-        raise Exception()
-    if result.scheme != 'http':
-        raise Exception()
+    if not result.scheme:
+        raise Exception('URL must have a scheme such as http or https')
+    elif not result.netloc:
+        raise Exception('no network location for URL')
+    if (result.scheme != 'https' and result.scheme != 'http'):
+        raise Exception('URL scheme must be http or https')
 
 def validate_url(args: Args) -> None:
     try:
         check_url(args.URL)
-    except Exception:
+    except Exception as e:
         if not re.match('^[a-z]*://', args.URL):
             args.URL = 'http://' + args.URL
             validate_url(args)
         else:
-            raise Exception(f'{args.URL}: invalid URL')
+            raise Exception(f'{args.URL}: invalid URL: {e}')
 
 def parse_args() -> Args:
     parser: Parser = Parser(description = 'An image scrapper')
@@ -106,7 +108,7 @@ def check_url_connection(args: Args) -> None:
 
 def create_save_directory(args: Args) -> None:
     if not os.path.exists(args.path):
-        print(f'Creating directory: {args.path}')
+        print(f'Creating directory: {args.path.resolve()}')
         os.makedirs(args.path)
     elif not os.path.isdir(args.path):
         raise Exception(args.path.name + ': not a directory.')
@@ -128,7 +130,7 @@ def download_image(args: Args, image_url: str, save_dir: str) -> int:
             print(f'{color.SUCCESS}Saved image to: {save_path}{color.RESET}')
         return 1
 
-def get_images_from_url(args: Args, url: str, save_dir: str) -> None:
+def download_images_from_url(args: Args, url: str) -> int:
     print_downloading_header(url, args.current_depth)
     count: int = 0
     download_count: int = 0
@@ -142,16 +144,18 @@ def get_images_from_url(args: Args, url: str, save_dir: str) -> None:
             continue
         count += 1
         image_url: str = os.path.dirname(url) + image_path
-        download_count += download_image(args, image_url, save_dir)
+        download_count += download_image(args, image_url, args.path)
     print(f'Downloaded {download_count} of {count} images from {url}')
+    return download_count
 
-def crawl(args: Args) -> None:
+def scrape(args: Args) -> None:
+    download_count: int = 0
     try:
         check_url_connection(args)
         print(f'{color.SUCCESS}URL OK: {args.URL}{color.RESET}')
         create_save_directory(args)
-        print(f'{color.SUCCESS}Save directory OK: {args.path}{color.RESET}')
-        get_images_from_url(args, args.URL, args.path)
+        print(f'{color.SUCCESS}Save directory OK: {args.path.resolve()}{color.RESET}')
+        download_count += download_images_from_url(args, args.URL)
     except Exception as e:
         print(f'{color.ERROR}spider.py: error: {e}{color.RESET}')
 
@@ -162,7 +166,7 @@ def main() -> None:
     print_header()
     args : Args = parse_args()
     print_args(args)
-    crawl(args)
+    scrape(args)
 
 if __name__ == '__main__':
     main()
