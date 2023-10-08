@@ -148,6 +148,8 @@ def download_images_from_url(args: Args, url: str) -> int:
     print(f'Downloaded {download_count} of {count} images from {url}')
     return download_count
 
+# TODO: check robots.txt to see if we are allowed to crawl this URL
+# TODO: add recursivity if enabled
 def scrape(args: Args) -> None:
     download_count: int = 0
     try:
