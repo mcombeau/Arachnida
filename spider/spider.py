@@ -4,7 +4,7 @@ import pathlib
 import re
 import requests
 from bs4 import BeautifulSoup, ResultSet
-from urllib.parse import ParseResult, urlparse
+from urllib.parse import ParseResult, urljoin, urlparse
 
 HEADER = '''
 ███████ ██████  ██ ██████  ███████ ██████
@@ -43,8 +43,6 @@ def print_args(args: Args) -> None:
     if args.recursive:
         print(f'[+] Scraping recursively to depth level: {color.INFO}{args.depth}{color.RESET}')
     print(f'[+] Saving images to directory: {color.INFO}{args.path}{color.RESET}')
-    if args.verbose:
-        print(f'[+] Verbose mode: {color.INFO}enabled{color.RESET}')
     print('{:-^80}'.format(''))
 
 def print_depth_header(depth: int) -> None:
@@ -90,12 +88,14 @@ def parse_args() -> Args:
     parser.add_argument('-r', '--recursive', action = 'store_true', help = 'download images recursively (to depth level 5 by default)')
     parser.add_argument('-l', '--level', dest = 'depth', type = int, help = 'depth level of recursive image search')
     parser.add_argument('-p', '--path', type = pathlib.Path, help = 'path to save downloaded images')
-    parser.add_argument('-v', '--verbose', action = 'store_true', help = 'enable verbose mode')
     parser.add_argument('URL', help = 'URL to download images from')
     args: Args = parser.parse_args()
-    if args.recursive and (args.depth is None):
-        args.depth = DEFAULT_DEPTH
-    if args.depth and (args.recursive is False):
+    if args.depth is None:
+        if args.recursive:
+            args.depth = DEFAULT_DEPTH
+        else:
+            args.depth = 1
+    elif args.depth and (args.recursive is False):
         parser.error("argument -l/--level: expected -r/--recursive argument.")
     if args.path is None:
         args.path = pathlib.Path(DEFAULT_PATH)
@@ -127,21 +127,21 @@ def download_image(args: Args, image_url: str, save_dir: str) -> int:
     if os.path.exists(save_path):
         print(f'{color.WARNING}Skipping: {image_name}: image already exists in {save_dir} directory.{color.RESET}')
         return 0
-    if args.verbose:
-        print(f'Downloading: {image_url}...')
-    r: Res = requests.get(image_url)
-    with open(save_path, 'wb') as f:
-        f.write(r.content)
-        if args.verbose:
+    print(f'Downloading: {image_url}...')
+    try:
+        r: Res = requests.get(image_url)
+        with open(save_path, 'wb') as f:
+            f.write(r.content)
             print(f'{color.SUCCESS}Saved image to: {save_path}{color.RESET}')
-        return 1
+            return 1
+    except Exception as e:
+        print(f'{color.WARNING}Skipping: {image_name}: {e}.{color.RESET}')
+        return 0
 
-def download_images_from_url(args: Args, url: str) -> int:
-    print_downloading_header(url, args.current_depth)
+def download_images_from_url(args: Args, url: str, soup: BeautifulSoup, current_depth: int) -> int:
+    print_downloading_header(url, current_depth)
     count: int = 0
     download_count: int = 0
-    r: Res = requests.get(url)
-    soup: BeautifulSoup = BeautifulSoup(r.content, 'html.parser')
     image_tags: ResultSet = soup.find_all('img')
     for image_tag in image_tags:
         image_path: str = image_tag.get('src')
@@ -154,17 +154,46 @@ def download_images_from_url(args: Args, url: str) -> int:
     print(f'Downloaded {download_count} of {count} images from {url}')
     return download_count
 
+def get_links_from_url(url: str, soup: BeautifulSoup) -> set[str]:
+    urls: set[str] = set()
+    links: ResultSet = soup.find_all('a')
+    for link in links:
+        href: str = link.get('href')
+        if not href:
+            continue
+        if not href.startswith('http://') or not href.startswith('https://'):
+            href: str = urljoin(url, href)
+        if href.startswith(url):
+            parse: ParseResult = urlparse(href)
+            final_url: str = parse.scheme + '://' + parse.netloc + parse.path
+            if final_url not in urls and final_url != url:
+                urls.add(final_url)
+    return urls
+
+def download_images_recusively(args: Args, url: str, visited_urls: set = set(), current_depth: int = 0, download_count: int = 0) -> int:
+    if current_depth >= args.depth:
+        return download_count
+    if url in visited_urls:
+        return download_count
+    visited_urls.add(url)
+    r: Res = requests.get(url)
+    soup: BeautifulSoup = BeautifulSoup(r.content, 'html.parser')
+    download_count += download_images_from_url(args, url, soup, current_depth)
+    links: set[str] = get_links_from_url(url, soup)
+    print(f'Found {len(links)} links in URL')
+    for link in links:
+        download_images_recusively(args, link, visited_urls, current_depth + 1, download_count)
+    return download_count
+
 # TODO: check robots.txt to see if we are allowed to crawl this URL
-# TODO: add recursivity if enabled
 def scrape(args: Args) -> None:
-    download_count: int = 0
     try:
         check_url_connection(args)
         print(f'{color.SUCCESS}URL OK: {args.URL}{color.RESET}')
         create_save_directory(args)
         print(f'{color.SUCCESS}Save directory OK: {args.path.resolve()}{color.RESET}')
-        download_count += download_images_from_url(args, args.URL)
-        print_total_downloaded(args, download_count)
+        count: int = download_images_recusively(args, args.URL)
+        print_total_downloaded(args, count)
     except Exception as e:
         print(f'{color.ERROR}spider.py: error: {e}{color.RESET}')
 
