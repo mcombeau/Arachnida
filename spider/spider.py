@@ -2,10 +2,13 @@ import argparse
 import os
 import pathlib
 import re
+from sys import path_importer_cache
 import requests
 from bs4 import BeautifulSoup, ResultSet
 from urllib.parse import ParseResult, urljoin, urlparse
+from urllib import robotparser
 
+USER_AGENT = "SpiderBot"
 HEADER = '''
 ███████ ██████  ██ ██████  ███████ ██████
 ██      ██   ██ ██ ██   ██ ██      ██   ██
@@ -21,6 +24,7 @@ EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
 Args = argparse.Namespace
 Parser = argparse.ArgumentParser
 Res = requests.Response
+RobotParser = robotparser.RobotFileParser
 
 # ---------------------------
 # Prettify
@@ -58,7 +62,8 @@ def print_downloading_header(url: str, depth: int) -> None:
 def print_total_downloaded(args: Args, download_count: int) -> None:
     print('')
     print('{:-^80}'.format(''))
-    print(f'TOTAL: {download_count} images downloaded from {args.URL}')
+    print('TOTAL:{:>83}'.format(f'{color.INFO}{download_count}{color.RESET} images downloaded'))
+    print('SAVE DIR:{:>80}'.format(f'{color.INFO}{args.path.resolve()}{color.RESET}'))
     print('{:-^80}'.format(''))
 
 # ---------------------------
@@ -88,6 +93,7 @@ def parse_args() -> Args:
     parser.add_argument('-r', '--recursive', action = 'store_true', help = 'download images recursively (to depth level 5 by default)')
     parser.add_argument('-l', '--level', dest = 'depth', type = int, help = 'depth level of recursive image search')
     parser.add_argument('-p', '--path', type = pathlib.Path, help = 'path to save downloaded images')
+    parser.add_argument('-v', '--verbose', action = 'store_true', default = False, help = 'Enable verbose mode')
     parser.add_argument('URL', help = 'URL to download images from')
     args: Args = parser.parse_args()
     if args.depth is None:
@@ -105,12 +111,26 @@ def parse_args() -> Args:
 # ---------------------------
 # Execution
 # ---------------------------
+def check_robots(url: str) -> None:
+    path_to_check: str = urlparse(url).path
+    base_url: str = urlparse(url).scheme + '://' + urlparse(url).netloc
+    robots_url: str = base_url + '/robots.txt'
+    parser: RobotParser  = robotparser.RobotFileParser()
+    parser.set_url(robots_url)
+    parser.read()
+    can_fetch: bool = parser.can_fetch(USER_AGENT, path_to_check)
+    if can_fetch == False:
+        raise Exception(robots_url + ' forbids path: ' + path_to_check)
+    print(f'{color.SUCCESS}URL robots.txt OK: {robots_url}{color.RESET}')
+
 def check_url_connection(args: Args) -> None:
     validate_url(args)
-    r: Res = requests.get(args.URL, headers={"User-Agent":"Mozilla/5.0"}, timeout = 1)
+    check_robots(args.URL)
+    r: Res = requests.get(args.URL, headers={"User-Agent":USER_AGENT}, timeout = 5)
     r.raise_for_status()
     if r.status_code != 200:
         print(f'spider.py: error: cannot access URL (HTTP response {r.status_code})')
+    print(f'{color.SUCCESS}URL OK (200 response): {args.URL}{color.RESET}')
 
 def create_save_directory(args: Args) -> None:
     if not os.path.exists(args.path):
@@ -120,20 +140,21 @@ def create_save_directory(args: Args) -> None:
         raise Exception(args.path.name + ': not a directory.')
     elif not os.access(args.path, os.W_OK) or not os.access(args.path, os.X_OK):
         raise Exception(args.path.name + ': Permission denied.')
+    print(f'{color.SUCCESS}Save directory OK: {args.path.resolve()}{color.RESET}')
 
-def download_image(args: Args, image_url: str, save_dir: str) -> int:
+def download_image(image_url: str, save_dir: str) -> int:
     image_name: str = os.path.basename(image_url)
     save_path: str = os.path.join(save_dir, image_name)
     if os.path.exists(save_path):
         print(f'{color.WARNING}Skipping: {image_name}: image already exists in {save_dir} directory.{color.RESET}')
         return 0
-    print(f'Downloading: {image_url}...')
     try:
-        r: Res = requests.get(image_url, stream = True)
+        check_robots(image_url)
+        r: Res = requests.get(image_url, stream = True, headers={"User-Agent":USER_AGENT}, timeout = 5)
         with open(save_path, 'wb') as f:
             f.write(r.content)
             f.close()
-            print(f'{color.SUCCESS}Saved image to: {save_path}{color.RESET}')
+            print(f'{color.SUCCESS}Downloaded image: {save_path}{color.RESET}')
             return 1
     except Exception as e:
         print(f'{color.WARNING}Skipping: {image_name}: {e}.{color.RESET}')
@@ -159,7 +180,9 @@ def download_images_from_url(args: Args, url: str, soup: BeautifulSoup, current_
             continue
         count += 1
         image_url: str = resolve_full_url(url, image_path)
-        download_count += download_image(args, image_url, args.path)
+        if args.verbose:
+            print(f'Downloading: {image_url}...')
+        download_count += download_image(image_url, args.path)
     print(f'Downloaded {download_count} of {count} images from {url}')
     return download_count
 
@@ -181,7 +204,7 @@ def download_images_recusively(args: Args, url: str, visited_urls: set = set(), 
     if url in visited_urls:
         return download_count
     visited_urls.add(url)
-    r: Res = requests.get(url)
+    r: Res = requests.get(url, headers={"User-Agent":USER_AGENT}, timeout = 5)
     soup: BeautifulSoup = BeautifulSoup(r.content, 'html.parser')
     download_count += download_images_from_url(args, url, soup, current_depth)
     links: set[str] = get_links_from_url(url, soup)
@@ -190,13 +213,10 @@ def download_images_recusively(args: Args, url: str, visited_urls: set = set(), 
         download_images_recusively(args, link, visited_urls, current_depth + 1, download_count)
     return download_count
 
-# TODO: check robots.txt to see if we are allowed to crawl this URL
 def scrape(args: Args) -> None:
     try:
         check_url_connection(args)
-        print(f'{color.SUCCESS}URL OK: {args.URL}{color.RESET}')
         create_save_directory(args)
-        print(f'{color.SUCCESS}Save directory OK: {args.path.resolve()}{color.RESET}')
         count: int = download_images_recusively(args, args.URL)
         print_total_downloaded(args, count)
     except Exception as e:
