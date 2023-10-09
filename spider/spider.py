@@ -2,7 +2,6 @@ import argparse
 import os
 import pathlib
 import re
-from sys import path_importer_cache
 import requests
 from bs4 import BeautifulSoup, ResultSet
 from urllib.parse import ParseResult, urljoin, urlparse
@@ -163,9 +162,9 @@ def download_image(image_url: str, save_dir: str) -> int:
 
 def resolve_full_url(base_url: str, path: str) -> str:
     parse: ParseResult = urlparse(path)
-    if not parse.netloc or parse.netloc is None:
+    if not parse.netloc:
         return urljoin(base_url, path)
-    elif not parse.scheme or parse.scheme is None:
+    elif not parse.scheme:
         return urljoin('http://', path)
     return path
 
