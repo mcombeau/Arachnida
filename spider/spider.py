@@ -129,14 +129,23 @@ def download_image(args: Args, image_url: str, save_dir: str) -> int:
         return 0
     print(f'Downloading: {image_url}...')
     try:
-        r: Res = requests.get(image_url)
+        r: Res = requests.get(image_url, stream = True)
         with open(save_path, 'wb') as f:
             f.write(r.content)
+            f.close()
             print(f'{color.SUCCESS}Saved image to: {save_path}{color.RESET}')
             return 1
     except Exception as e:
         print(f'{color.WARNING}Skipping: {image_name}: {e}.{color.RESET}')
         return 0
+
+def resolve_full_url(base_url: str, path: str) -> str:
+    parse: ParseResult = urlparse(path)
+    if not parse.netloc or parse.netloc is None:
+        return urljoin(base_url, path)
+    elif not parse.scheme or parse.scheme is None:
+        return urljoin('http://', path)
+    return path
 
 def download_images_from_url(args: Args, url: str, soup: BeautifulSoup, current_depth: int) -> int:
     print_downloading_header(url, current_depth)
@@ -149,7 +158,7 @@ def download_images_from_url(args: Args, url: str, soup: BeautifulSoup, current_
         if image_ext.lower() not in EXTENSIONS:
             continue
         count += 1
-        image_url: str = os.path.dirname(url) + image_path
+        image_url: str = resolve_full_url(url, image_path)
         download_count += download_image(args, image_url, args.path)
     print(f'Downloaded {download_count} of {count} images from {url}')
     return download_count
@@ -161,13 +170,9 @@ def get_links_from_url(url: str, soup: BeautifulSoup) -> set[str]:
         href: str = link.get('href')
         if not href:
             continue
-        if not href.startswith('http://') or not href.startswith('https://'):
-            href: str = urljoin(url, href)
-        if href.startswith(url):
-            parse: ParseResult = urlparse(href)
-            final_url: str = parse.scheme + '://' + parse.netloc + parse.path
-            if final_url not in urls and final_url != url:
-                urls.add(final_url)
+        link_url: str = resolve_full_url(url, href)
+        if link_url not in urls and link_url != url:
+            urls.add(link_url)
     return urls
 
 def download_images_recusively(args: Args, url: str, visited_urls: set = set(), current_depth: int = 0, download_count: int = 0) -> int:
