@@ -54,9 +54,9 @@ def print_depth_header(depth: int) -> None:
     print('{:^80}'.format(f'Depth {depth}'))
     print('{:=^80}'.format(''))
 
-def print_downloading_header(url: str, depth: int) -> None:
+def print_visiting_header(url: str, depth: int) -> None:
     print('{:-^80}'.format(''))
-    print(f'[Depth: {depth}] Downloading images from: {url}')
+    print(f'[Depth: {depth}] Visiting URL: {url}')
     print('{:-^80}'.format(''))
 
 def print_total_downloaded(args: Args, download_count: int) -> None:
@@ -111,7 +111,7 @@ def parse_args() -> Args:
 # ---------------------------
 # Execution
 # ---------------------------
-def check_robots(url: str) -> None:
+def check_robots(url: str, print_success: bool = False) -> None:
     path_to_check: str = urlparse(url).path
     base_url: str = urlparse(url).scheme + '://' + urlparse(url).netloc
     robots_url: str = base_url + '/robots.txt'
@@ -121,11 +121,12 @@ def check_robots(url: str) -> None:
     can_fetch: bool = parser.can_fetch(USER_AGENT, path_to_check)
     if can_fetch == False:
         raise Exception(robots_url + ' forbids path: ' + path_to_check)
-    print(f'{color.SUCCESS}URL robots.txt OK: {robots_url}{color.RESET}')
+    if print_success:
+        print(f'{color.SUCCESS}URL robots.txt OK: {robots_url}{color.RESET}')
 
 def check_url_connection(args: Args) -> None:
     validate_url(args)
-    check_robots(args.URL)
+    check_robots(args.URL, True)
     r: Res = requests.get(args.URL, headers={"User-Agent":USER_AGENT}, timeout = 5)
     r.raise_for_status()
     if r.status_code != 200:
@@ -168,8 +169,7 @@ def resolve_full_url(base_url: str, path: str) -> str:
         return urljoin('http://', path)
     return path
 
-def download_images_from_url(args: Args, url: str, soup: BeautifulSoup, current_depth: int) -> int:
-    print_downloading_header(url, current_depth)
+def download_images_from_url(args: Args, url: str, soup: BeautifulSoup) -> int:
     count: int = 0
     download_count: int = 0
     image_tags: ResultSet = soup.find_all('img')
@@ -204,14 +204,20 @@ def download_images_recusively(args: Args, url: str, visited_urls: set = set(), 
     if url in visited_urls:
         return download_count
     visited_urls.add(url)
-    r: Res = requests.get(url, headers={"User-Agent":USER_AGENT}, timeout = 5)
-    soup: BeautifulSoup = BeautifulSoup(r.content, 'html.parser')
-    download_count += download_images_from_url(args, url, soup, current_depth)
-    links: set[str] = get_links_from_url(url, soup)
-    print(f'Found {len(links)} links in URL')
-    for link in links:
-        download_images_recusively(args, link, visited_urls, current_depth + 1, download_count)
-    return download_count
+    print_visiting_header(url, current_depth)
+    try:
+        check_robots(url)
+        r: Res = requests.get(url, headers={"User-Agent":USER_AGENT}, timeout = 5)
+        soup: BeautifulSoup = BeautifulSoup(r.content, 'html.parser')
+        download_count += download_images_from_url(args, url, soup)
+        links: set[str] = get_links_from_url(url, soup)
+        print(f'Found {len(links)} links in URL')
+        for link in links:
+            download_images_recusively(args, link, visited_urls, current_depth + 1, download_count)
+        return download_count
+    except Exception as e:
+        print(f'{color.ERROR}Skipping URL: {e}{color.RESET}')
+        return download_count
 
 def scrape(args: Args) -> None:
     try:
