@@ -72,25 +72,6 @@ def print_total_downloaded(args: Args) -> None:
 # ---------------------------
 # Argument parsing
 # ---------------------------
-def check_url(url: str) -> None:
-    result: ParseResult = urlparse(url)
-    if not result.scheme:
-        raise Exception('URL must have a scheme such as http or https')
-    elif not result.netloc:
-        raise Exception('no network location for URL')
-    if (result.scheme != 'https' and result.scheme != 'http'):
-        raise Exception('URL scheme must be http or https')
-
-def validate_url(args: Args) -> None:
-    try:
-        check_url(args.URL)
-    except Exception as e:
-        if not re.match('^[a-z]*://', args.URL):
-            args.URL = 'http://' + args.URL
-            validate_url(args)
-        else:
-            raise Exception(f'{args.URL}: invalid URL: {e}')
-
 def parse_args() -> Args:
     parser: Parser = Parser(description = 'An image scrapper')
     parser.add_argument('-r', '--recursive', action = 'store_true', help = 'download images recursively (to depth level 5 by default)')
@@ -111,9 +92,47 @@ def parse_args() -> Args:
     args.current_depth = 0
     return args
 
+def create_save_directory(args: Args) -> None:
+    if not os.path.exists(args.path):
+        print(f'Creating directory: {args.path.resolve()}')
+        os.makedirs(args.path)
+    elif not os.path.isdir(args.path):
+        raise Exception(args.path.name + ': not a directory.')
+    elif not os.access(args.path, os.W_OK) or not os.access(args.path, os.X_OK):
+        raise Exception(args.path.name + ': Permission denied.')
+    print(f'{color.SUCCESS}Save directory OK: {args.path.resolve()}{color.RESET}')
+
 # ---------------------------
-# Execution
+# URL validation and resolution
 # ---------------------------
+def check_url(url: str) -> None:
+    result: ParseResult = urlparse(url)
+    if not result.scheme:
+        raise Exception('URL must have a scheme such as http or https')
+    elif not result.netloc:
+        raise Exception('no network location for URL')
+    if (result.scheme != 'https' and result.scheme != 'http'):
+        raise Exception('URL scheme must be http or https')
+
+def validate_url(args: Args) -> None:
+    try:
+        check_url(args.URL)
+    except Exception as e:
+        if not re.match('^[a-z]*://', args.URL):
+            args.URL = 'http://' + args.URL
+            validate_url(args)
+        else:
+            raise Exception(f'{args.URL}: invalid URL: {e}')
+
+def check_url_connection(args: Args) -> None:
+    validate_url(args)
+    check_robots(args.URL, True)
+    r: Res = requests.get(args.URL, headers={"User-Agent":USER_AGENT}, timeout = 5)
+    r.raise_for_status()
+    if r.status_code != 200:
+        print(f'spider.py: error: cannot access URL (HTTP response {r.status_code})')
+    print(f'{color.SUCCESS}URL OK (200 response): {args.URL}{color.RESET}')
+
 def check_robots(url: str, print_success: bool = False) -> None:
     path_to_check: str = urlparse(url).path
     base_url: str = urlparse(url).scheme + '://' + urlparse(url).netloc
@@ -127,45 +146,6 @@ def check_robots(url: str, print_success: bool = False) -> None:
     if print_success:
         print(f'{color.SUCCESS}URL robots.txt OK: {robots_url}{color.RESET}')
 
-def check_url_connection(args: Args) -> None:
-    validate_url(args)
-    check_robots(args.URL, True)
-    r: Res = requests.get(args.URL, headers={"User-Agent":USER_AGENT}, timeout = 5)
-    r.raise_for_status()
-    if r.status_code != 200:
-        print(f'spider.py: error: cannot access URL (HTTP response {r.status_code})')
-    print(f'{color.SUCCESS}URL OK (200 response): {args.URL}{color.RESET}')
-
-def create_save_directory(args: Args) -> None:
-    if not os.path.exists(args.path):
-        print(f'Creating directory: {args.path.resolve()}')
-        os.makedirs(args.path)
-    elif not os.path.isdir(args.path):
-        raise Exception(args.path.name + ': not a directory.')
-    elif not os.access(args.path, os.W_OK) or not os.access(args.path, os.X_OK):
-        raise Exception(args.path.name + ': Permission denied.')
-    print(f'{color.SUCCESS}Save directory OK: {args.path.resolve()}{color.RESET}')
-
-def download_image(image_url: str, save_dir: str) -> int:
-    global dl_count
-    image_name: str = os.path.basename(image_url)
-    save_path: str = os.path.join(save_dir, image_name)
-    if os.path.exists(save_path):
-        print(f'{color.WARNING}Skipping: {image_name}: image already exists in {save_dir} directory.{color.RESET}')
-        return 0
-    try:
-        check_robots(image_url)
-        r: Res = requests.get(image_url, stream = True, headers={"User-Agent":USER_AGENT}, timeout = 5)
-        with open(save_path, 'wb') as f:
-            f.write(r.content)
-            f.close()
-            dl_count += 1
-            print(f'{color.SUCCESS}Downloaded image: {save_path}{color.RESET}')
-            return 1
-    except Exception as e:
-        print(f'{color.WARNING}Skipping: {image_name}: {e}.{color.RESET}')
-        return 0
-
 def resolve_full_url(base_url: str, path: str) -> str:
     parse: ParseResult = urlparse(path)
     if not parse.netloc:
@@ -173,22 +153,6 @@ def resolve_full_url(base_url: str, path: str) -> str:
     elif not parse.scheme:
         return 'http://' + parse.netloc + parse.path
     return parse.scheme + '://' + parse.netloc + parse.path
-
-def download_images_from_url(args: Args, url: str, soup: BeautifulSoup) -> None:
-    count: int = 0
-    download_count: int = 0
-    image_tags: ResultSet = soup.find_all('img')
-    for image_tag in image_tags:
-        image_path: str = image_tag.get('src')
-        image_ext: str = os.path.splitext(image_path)[-1]
-        if image_ext.lower() not in EXTENSIONS:
-            continue
-        count += 1
-        image_url: str = resolve_full_url(url, image_path)
-        if args.verbose:
-            print(f'Downloading: {image_url}...')
-        download_count += download_image(image_url, args.path)
-    print(f'Downloaded {download_count} of {count} images from {url}')
 
 def get_link_from_href(base_url: str, href: str, urls: set[str]) -> Optional[str]:
     if not href:
@@ -214,6 +178,45 @@ def get_links_from_url(url: str, soup: BeautifulSoup) -> set[str]:
             urls.add(link)
     return urls
 
+# ---------------------------
+# Image download
+# ---------------------------
+def download_image(image_url: str, save_dir: str) -> int:
+    global dl_count
+    image_name: str = os.path.basename(image_url)
+    save_path: str = os.path.join(save_dir, image_name)
+    if os.path.exists(save_path):
+        print(f'{color.WARNING}Skipping: {image_name}: image already exists in {save_dir} directory.{color.RESET}')
+        return 0
+    try:
+        check_robots(image_url)
+        r: Res = requests.get(image_url, stream = True, headers={"User-Agent":USER_AGENT}, timeout = 5)
+        with open(save_path, 'wb') as f:
+            f.write(r.content)
+            f.close()
+            dl_count += 1
+            print(f'{color.SUCCESS}Downloaded image: {save_path}{color.RESET}')
+            return 1
+    except Exception as e:
+        print(f'{color.WARNING}Skipping: {image_name}: {e}.{color.RESET}')
+        return 0
+
+def download_images_from_url(args: Args, url: str, soup: BeautifulSoup) -> None:
+    count: int = 0
+    download_count: int = 0
+    image_tags: ResultSet = soup.find_all('img')
+    for image_tag in image_tags:
+        image_path: str = image_tag.get('src')
+        image_ext: str = os.path.splitext(image_path)[-1]
+        if image_ext.lower() not in EXTENSIONS:
+            continue
+        count += 1
+        image_url: str = resolve_full_url(url, image_path)
+        if args.verbose:
+            print(f'Downloading: {image_url}...')
+        download_count += download_image(image_url, args.path)
+    print(f'Downloaded {download_count} of {count} images from {url}')
+
 def download_images_recusively(args: Args, url: str, visited_urls: set = set(), current_depth: int = 0, download_count: int = 0) -> None:
     if current_depth >= args.depth:
         return
@@ -233,6 +236,9 @@ def download_images_recusively(args: Args, url: str, visited_urls: set = set(), 
     except Exception as e:
         print(f'{color.ERROR}Skipping URL: {e}{color.RESET}')
 
+# ---------------------------
+# Main
+# ---------------------------
 def scrape(args: Args) -> None:
     try:
         check_url_connection(args)
@@ -242,9 +248,6 @@ def scrape(args: Args) -> None:
     except Exception as e:
         print(f'{color.ERROR}spider.py: error: {e}{color.RESET}')
 
-# ---------------------------
-# Main
-# ---------------------------
 def main() -> None:
     print_header()
     args : Args = parse_args()
