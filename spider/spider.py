@@ -229,10 +229,11 @@ def download_images_recusively(args: Args, url: str, visited_urls: set = set(), 
         r: Res = requests.get(url, headers={"User-Agent":USER_AGENT}, timeout = 5)
         soup: BeautifulSoup = BeautifulSoup(r.content, 'html.parser')
         download_images_from_url(args, url, soup)
-        links: set[str] = get_links_from_url(url, soup)
-        print(f'Found {len(links)} links in URL')
-        for link in links:
-            download_images_recusively(args, link, visited_urls, current_depth + 1, download_count)
+        if current_depth + 1 < args.depth:
+            links: set[str] = get_links_from_url(url, soup)
+            print(f'{color.INFO}Discovered {len(links)} links in URL{color.RESET}')
+            for link in links:
+                download_images_recusively(args, link, visited_urls, current_depth + 1, download_count)
     except Exception as e:
         print(f'{color.ERROR}Skipping URL: {e}{color.RESET}')
 
