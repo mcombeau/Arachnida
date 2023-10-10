@@ -6,6 +6,7 @@ import requests
 from bs4 import BeautifulSoup, ResultSet
 from urllib.parse import ParseResult, urljoin, urlparse
 from urllib import robotparser
+from typing import Optional
 
 USER_AGENT = "SpiderBot"
 HEADER = '''
@@ -163,10 +164,10 @@ def download_image(image_url: str, save_dir: str) -> int:
 def resolve_full_url(base_url: str, path: str) -> str:
     parse: ParseResult = urlparse(path)
     if not parse.netloc:
-        return urljoin(base_url, path)
+        return urljoin(base_url, parse.path)
     elif not parse.scheme:
-        return urljoin('http://', path)
-    return path
+        return 'http://' + parse.netloc + parse.path
+    return parse.scheme + '://' + parse.netloc + parse.path
 
 def download_images_from_url(args: Args, url: str, soup: BeautifulSoup) -> int:
     count: int = 0
@@ -185,16 +186,28 @@ def download_images_from_url(args: Args, url: str, soup: BeautifulSoup) -> int:
     print(f'Downloaded {download_count} of {count} images from {url}')
     return download_count
 
+def get_link_from_href(base_url: str, href: str, urls: set[str]) -> Optional[str]:
+    if not href:
+        return None
+    link: str = resolve_full_url(base_url, href)
+    if link in urls or link == base_url:
+        return None
+    parse_base_url: ParseResult = urlparse(base_url)
+    parse_link_url: ParseResult = urlparse(link)
+    if parse_base_url.netloc != parse_link_url.netloc:
+        return None
+    return link
+
 def get_links_from_url(url: str, soup: BeautifulSoup) -> set[str]:
     urls: set[str] = set()
-    links: ResultSet = soup.find_all('a')
-    for link in links:
-        href: str = link.get('href')
-        if not href:
+    hrefs: ResultSet = soup.find_all('a')
+    for h in hrefs:
+        href: str = h.get('href')
+        link: str | None = get_link_from_href(url, href, urls)
+        if not link or link is None:
             continue
-        link_url: str = resolve_full_url(url, href)
-        if link_url not in urls and link_url != url:
-            urls.add(link_url)
+        else:
+            urls.add(link)
     return urls
 
 def download_images_recusively(args: Args, url: str, visited_urls: set = set(), current_depth: int = 0, download_count: int = 0) -> int:
