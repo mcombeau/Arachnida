@@ -1,6 +1,6 @@
 # Spider
 
-Spider is a small image-scraping script in Python.
+Spider is a small image-scraping script in Python. Downloads `.jpg`, `.jpeg`, `.png`, `.gif`, and `.bmp` images from a given URL, recursively.
 
 This bot respects `robots.txt`. Please do not use this program for malicious purposes.
 
