@@ -26,6 +26,8 @@ Parser = argparse.ArgumentParser
 Res = requests.Response
 RobotParser = robotparser.RobotFileParser
 
+dl_count: int = 0
+
 # ---------------------------
 # Prettify
 # ---------------------------
@@ -59,10 +61,11 @@ def print_visiting_header(url: str, depth: int) -> None:
     print(f'[Depth: {depth}] Visiting URL: {url}')
     print('{:-^80}'.format(''))
 
-def print_total_downloaded(args: Args, download_count: int) -> None:
+def print_total_downloaded(args: Args) -> None:
+    global dl_count
     print('')
     print('{:-^80}'.format(''))
-    print('TOTAL:{:>83}'.format(f'{color.INFO}{download_count}{color.RESET} images downloaded'))
+    print('TOTAL:{:>83}'.format(f'{color.INFO}{dl_count}{color.RESET} images downloaded'))
     print('SAVE DIR:{:>80}'.format(f'{color.INFO}{args.path.resolve()}{color.RESET}'))
     print('{:-^80}'.format(''))
 
@@ -144,6 +147,7 @@ def create_save_directory(args: Args) -> None:
     print(f'{color.SUCCESS}Save directory OK: {args.path.resolve()}{color.RESET}')
 
 def download_image(image_url: str, save_dir: str) -> int:
+    global dl_count
     image_name: str = os.path.basename(image_url)
     save_path: str = os.path.join(save_dir, image_name)
     if os.path.exists(save_path):
@@ -155,6 +159,7 @@ def download_image(image_url: str, save_dir: str) -> int:
         with open(save_path, 'wb') as f:
             f.write(r.content)
             f.close()
+            dl_count += 1
             print(f'{color.SUCCESS}Downloaded image: {save_path}{color.RESET}')
             return 1
     except Exception as e:
@@ -169,7 +174,7 @@ def resolve_full_url(base_url: str, path: str) -> str:
         return 'http://' + parse.netloc + parse.path
     return parse.scheme + '://' + parse.netloc + parse.path
 
-def download_images_from_url(args: Args, url: str, soup: BeautifulSoup) -> int:
+def download_images_from_url(args: Args, url: str, soup: BeautifulSoup) -> None:
     count: int = 0
     download_count: int = 0
     image_tags: ResultSet = soup.find_all('img')
@@ -184,7 +189,6 @@ def download_images_from_url(args: Args, url: str, soup: BeautifulSoup) -> int:
             print(f'Downloading: {image_url}...')
         download_count += download_image(image_url, args.path)
     print(f'Downloaded {download_count} of {count} images from {url}')
-    return download_count
 
 def get_link_from_href(base_url: str, href: str, urls: set[str]) -> Optional[str]:
     if not href:
@@ -210,33 +214,31 @@ def get_links_from_url(url: str, soup: BeautifulSoup) -> set[str]:
             urls.add(link)
     return urls
 
-def download_images_recusively(args: Args, url: str, visited_urls: set = set(), current_depth: int = 0, download_count: int = 0) -> int:
+def download_images_recusively(args: Args, url: str, visited_urls: set = set(), current_depth: int = 0, download_count: int = 0) -> None:
     if current_depth >= args.depth:
-        return download_count
+        return
     if url in visited_urls:
-        return download_count
+        return
     visited_urls.add(url)
     print_visiting_header(url, current_depth)
     try:
         check_robots(url)
         r: Res = requests.get(url, headers={"User-Agent":USER_AGENT}, timeout = 5)
         soup: BeautifulSoup = BeautifulSoup(r.content, 'html.parser')
-        download_count += download_images_from_url(args, url, soup)
+        download_images_from_url(args, url, soup)
         links: set[str] = get_links_from_url(url, soup)
         print(f'Found {len(links)} links in URL')
         for link in links:
             download_images_recusively(args, link, visited_urls, current_depth + 1, download_count)
-        return download_count
     except Exception as e:
         print(f'{color.ERROR}Skipping URL: {e}{color.RESET}')
-        return download_count
 
 def scrape(args: Args) -> None:
     try:
         check_url_connection(args)
         create_save_directory(args)
-        count: int = download_images_recusively(args, args.URL)
-        print_total_downloaded(args, count)
+        download_images_recusively(args, args.URL)
+        print_total_downloaded(args)
     except Exception as e:
         print(f'{color.ERROR}spider.py: error: {e}{color.RESET}')
 
