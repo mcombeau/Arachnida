@@ -26,7 +26,7 @@ Parser = argparse.ArgumentParser
 Res = requests.Response
 RobotParser = robotparser.RobotFileParser
 
-dl_count: int = 0
+total_downloads: int = 0
 
 # ---------------------------
 # Prettify
@@ -62,10 +62,10 @@ def print_visiting_header(url: str, depth: int) -> None:
     print('{:-^80}'.format(''))
 
 def print_total_downloaded(args: Args) -> None:
-    global dl_count
+    global total_downloads
     print('')
     print('{:-^80}'.format(''))
-    print('TOTAL:{:>83}'.format(f'{color.INFO}{dl_count}{color.RESET} images downloaded'))
+    print('TOTAL:{:>83}'.format(f'{color.INFO}{total_downloads}{color.RESET} images downloaded'))
     print('SAVE DIR:{:>80}'.format(f'{color.INFO}{args.path.resolve()}{color.RESET}'))
     print('{:-^80}'.format(''))
 
@@ -182,7 +182,7 @@ def get_links_from_url(url: str, soup: BeautifulSoup) -> set[str]:
 # Image download
 # ---------------------------
 def download_image(image_url: str, save_dir: str) -> int:
-    global dl_count
+    global total_downloads
     image_name: str = os.path.basename(image_url)
     save_path: str = os.path.join(save_dir, image_name)
     if os.path.exists(save_path):
@@ -194,7 +194,7 @@ def download_image(image_url: str, save_dir: str) -> int:
         with open(save_path, 'wb') as f:
             f.write(r.content)
             f.close()
-            dl_count += 1
+            total_downloads += 1
             print(f'{color.SUCCESS}Downloaded image: {save_path}{color.RESET}')
             return 1
     except Exception as e:
