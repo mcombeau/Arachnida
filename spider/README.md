@@ -11,7 +11,7 @@ Clone this repository and `cd` into `Arachnida/spider`.
 To run the program, use:
 
 ```bash
-python3 spider.py URL [-r/--recursive][-l/--level N][-p/--path path]
+python3 spider.py [-r/--recursive][-l/--level N][-p/--path path][-v/--verbose] URL
 ```
 
 The options are as follows:
