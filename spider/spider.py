@@ -51,14 +51,9 @@ def print_args(args: Args) -> None:
     print(f'[+] Saving images to directory: {color.INFO}{args.path}{color.RESET}')
     print('{:-^80}'.format(''))
 
-def print_depth_header(depth: int) -> None:
-    print('{:=^80}'.format(''))
-    print('{:^80}'.format(f'Depth {depth}'))
-    print('{:=^80}'.format(''))
-
 def print_visiting_header(url: str, depth: int) -> None:
     print('{:-^80}'.format(''))
-    print(f'[Depth: {depth}] Visiting URL: {url}')
+    print(f'[Depth: {color.INFO}{depth}{color.RESET}] Visiting URL: {color.INFO}{url}{color.RESET}')
     print('{:-^80}'.format(''))
 
 def print_total_downloaded(args: Args) -> None:
@@ -230,7 +225,7 @@ def download_images_from_url(args: Args, url: str, soup: BeautifulSoup) -> None:
         if args.verbose:
             print(f'Downloading: {image_url}...')
         download_count += download_image(image_url, args.path)
-    print(f'Downloaded {download_count} of {image_count} images from {url}')
+    print(f'Downloaded {color.INFO}{download_count}{color.RESET} of {color.INFO}{image_count}{color.RESET} images from {color.INFO}{url}{color.RESET}')
 
 def download_images_recusively(args: Args, url: str, visited_urls: set = set(), current_depth: int = 0, download_count: int = 0) -> None:
     if current_depth >= args.depth:
@@ -245,7 +240,7 @@ def download_images_recusively(args: Args, url: str, visited_urls: set = set(), 
         download_images_from_url(args, url, soup)
         if current_depth + 1 < args.depth:
             links: set[str] = get_links_from_url(url, soup)
-            print(f'{color.INFO}Discovered {len(links)} links in URL{color.RESET}')
+            print(f'Discovered {color.INFO}{len(links)}{color.RESET} links in URL')
             for link in links:
                 download_images_recusively(args, link, visited_urls, current_depth + 1, download_count)
     except Exception as e:
