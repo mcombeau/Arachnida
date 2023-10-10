@@ -263,8 +263,8 @@ def scrape(args: Args) -> None:
         print_total_downloaded(args)
 
 def main() -> None:
-    args: Args = parse_args()
     print_header()
+    args: Args = parse_args()
     print_args(args)
     scrape(args)
 
