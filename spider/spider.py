@@ -103,6 +103,30 @@ def create_save_directory(args: Args) -> None:
     print(f'{color.SUCCESS}Save directory OK: {args.path.resolve()}{color.RESET}')
 
 # ---------------------------
+# Get request
+# ---------------------------
+def check_robots(url: str, verbose: bool = False) -> None:
+    path_to_check: str = urlparse(url).path
+    base_url: str = urlparse(url).scheme + '://' + urlparse(url).netloc
+    robots_url: str = base_url + '/robots.txt'
+    parser: RobotParser  = robotparser.RobotFileParser()
+    parser.set_url(robots_url)
+    parser.read()
+    can_fetch: bool = parser.can_fetch(USER_AGENT, path_to_check)
+    if can_fetch == False:
+        raise Exception(robots_url + ' forbids path: ' + path_to_check)
+    if verbose:
+        print(f'{color.SUCCESS}URL robots.txt OK: {robots_url}{color.RESET}')
+
+def get_url_content(url: str, verbose: bool = False) -> bytes:
+    check_robots(url, verbose)
+    r: Res = requests.get(url, headers={"User-Agent":USER_AGENT}, timeout = 5)
+    r.raise_for_status()
+    if verbose:
+        print(f'{color.SUCCESS}URL OK ({r.status_code} response): {url}{color.RESET}')
+    return r.content
+
+# ---------------------------
 # URL validation and resolution
 # ---------------------------
 def check_url(url: str) -> None:
@@ -126,26 +150,19 @@ def validate_url(args: Args) -> None:
 
 def check_url_connection(args: Args) -> None:
     validate_url(args)
-    check_robots(args.URL, True)
-    r: Res = requests.get(args.URL, headers={"User-Agent":USER_AGENT}, timeout = 5)
-    r.raise_for_status()
-    if r.status_code != 200:
-        print(f'spider.py: error: cannot access URL (HTTP response {r.status_code})')
-    print(f'{color.SUCCESS}URL OK (200 response): {args.URL}{color.RESET}')
+    get_url_content(args.URL, True)
 
-def check_robots(url: str, print_success: bool = False) -> None:
-    path_to_check: str = urlparse(url).path
-    base_url: str = urlparse(url).scheme + '://' + urlparse(url).netloc
-    robots_url: str = base_url + '/robots.txt'
-    parser: RobotParser  = robotparser.RobotFileParser()
-    parser.set_url(robots_url)
-    parser.read()
-    can_fetch: bool = parser.can_fetch(USER_AGENT, path_to_check)
-    if can_fetch == False:
-        raise Exception(robots_url + ' forbids path: ' + path_to_check)
-    if print_success:
-        print(f'{color.SUCCESS}URL robots.txt OK: {robots_url}{color.RESET}')
-
+# URLs look like this:
+#     scheme://netloc/path/to/page#fragment
+# But sometimes links in href or img src are partial:
+#       /path/to/page#fragment
+#       netloc/path/to/page
+# If there is no netloc, we need to add the scheme and netloc of base_url
+# If there is no scheme we need to add http://
+# Otherwise we can return the path as is, but without the fragment part
+# Because fragments do not represent the page itself:
+#       scheme://netloc/path/to/page#fragment
+# ==    scheme://netloc/path/to/page
 def resolve_full_url(base_url: str, path: str) -> str:
     parse: ParseResult = urlparse(path)
     if not parse.netloc:
@@ -185,14 +202,12 @@ def download_image(image_url: str, save_dir: str) -> int:
     global total_downloads
     image_name: str = os.path.basename(image_url)
     save_path: str = os.path.join(save_dir, image_name)
-    if os.path.exists(save_path):
-        print(f'{color.WARNING}Skipping: {image_name}: image already exists in {save_dir} directory.{color.RESET}')
-        return 0
     try:
-        check_robots(image_url)
-        r: Res = requests.get(image_url, stream = True, headers={"User-Agent":USER_AGENT}, timeout = 5)
+        if os.path.exists(save_path):
+            raise Exception(f'image already exists in {save_dir} directory')
+        content: bytes = get_url_content(image_url)
         with open(save_path, 'wb') as f:
-            f.write(r.content)
+            f.write(content)
             f.close()
             total_downloads += 1
             print(f'{color.SUCCESS}Downloaded image: {save_path}{color.RESET}')
@@ -202,7 +217,7 @@ def download_image(image_url: str, save_dir: str) -> int:
         return 0
 
 def download_images_from_url(args: Args, url: str, soup: BeautifulSoup) -> None:
-    count: int = 0
+    image_count: int = 0
     download_count: int = 0
     image_tags: ResultSet = soup.find_all('img')
     for image_tag in image_tags:
@@ -210,12 +225,12 @@ def download_images_from_url(args: Args, url: str, soup: BeautifulSoup) -> None:
         image_ext: str = os.path.splitext(image_path)[-1]
         if image_ext.lower() not in EXTENSIONS:
             continue
-        count += 1
+        image_count += 1
         image_url: str = resolve_full_url(url, image_path)
         if args.verbose:
             print(f'Downloading: {image_url}...')
         download_count += download_image(image_url, args.path)
-    print(f'Downloaded {download_count} of {count} images from {url}')
+    print(f'Downloaded {download_count} of {image_count} images from {url}')
 
 def download_images_recusively(args: Args, url: str, visited_urls: set = set(), current_depth: int = 0, download_count: int = 0) -> None:
     if current_depth >= args.depth:
@@ -225,9 +240,8 @@ def download_images_recusively(args: Args, url: str, visited_urls: set = set(), 
     visited_urls.add(url)
     print_visiting_header(url, current_depth)
     try:
-        check_robots(url)
-        r: Res = requests.get(url, headers={"User-Agent":USER_AGENT}, timeout = 5)
-        soup: BeautifulSoup = BeautifulSoup(r.content, 'html.parser')
+        content: bytes = get_url_content(url)
+        soup: BeautifulSoup = BeautifulSoup(content, 'html.parser')
         download_images_from_url(args, url, soup)
         if current_depth + 1 < args.depth:
             links: set[str] = get_links_from_url(url, soup)
@@ -246,12 +260,16 @@ def scrape(args: Args) -> None:
         create_save_directory(args)
         download_images_recusively(args, args.URL)
         print_total_downloaded(args)
+    except KeyboardInterrupt:
+        print_total_downloaded(args)
+        exit(130)
     except Exception as e:
         print(f'{color.ERROR}spider.py: error: {e}{color.RESET}')
+        print_total_downloaded(args)
 
 def main() -> None:
+    args: Args = parse_args()
     print_header()
-    args : Args = parse_args()
     print_args(args)
     scrape(args)
 
