@@ -41,10 +41,19 @@ def print_header() -> None:
     for line in HEADER.splitlines():
         print(color.HEADER + '{:^70}'.format(line) + color.RESET)
 
-def print_image_header(args: Args, image_number: int, image: Path) -> None:
+def print_image_metadata_header(args: Args, image_number: int, image: Path) -> None:
     print('{:-^80}'.format(''))
     print(f'[{color.INFO}{image_number}{color.RESET}/{len(args.image)}] Metadata for image: {color.INFO}{image}{color.RESET}')
     print('{:-^80}'.format(''))
+
+def print_deleting_metadata_header() -> None:
+    print('{:-^80}'.format(''))
+    print(f'Deleting metadata')
+    print('{:-^80}'.format(''))
+
+def print_deleting_image_metadata(args: Args, image_number: int, image: Path, save: str) -> None:
+    print(f'[{color.INFO}{image_number}{color.RESET}/{len(args.image)}] Deleting metadata for image: {color.INFO}{image}{color.RESET}')
+    print(f'Saving stripped image to: {color.INFO}{save}{color.RESET}')
 
 def print_image_metadata(metadata: dict[str, Any], verbose: bool = False) -> None:
     for key, value in metadata.items():
@@ -64,6 +73,7 @@ def print_image_metadata(metadata: dict[str, Any], verbose: bool = False) -> Non
 def parse_args() -> Args:
     parser: Parser = Parser(description = 'An image metadata viewer')
     parser.add_argument('image', type = pathlib.Path, nargs = '+', help = f'image to view EXIF data for. Supported types: {EXTENSIONS}')
+    parser.add_argument('-d', '--delete', action = 'store_true', default = False, help = 'delete all exif data from image(s)')
     parser.add_argument('-v', '--verbose', action = 'store_true', default = False, help = 'Enable verbose mode')
     args: Args = parser.parse_args()
     return args
@@ -94,7 +104,8 @@ def extract_image_exif(image: Any, metadata: dict[str, Any]) -> None:
         tag: str = ExifTags.TAGS.get(tag_id, tag_id)
         metadata[tag] = value
 
-def display_image_metadata(args: Args, image_path: Path) -> None:
+def display_image_metadata(args: Args, image_path: Path, index: int) -> None:
+    print_image_metadata_header(args, index, image_path)
     metadata: dict[str, Any] = {}
     try:
         extract_basic_file_info(image_path, metadata)
@@ -108,18 +119,42 @@ def display_image_metadata(args: Args, image_path: Path) -> None:
         print_image_metadata(metadata, args.verbose)
         print(f'{color.WARNING}Skipping image: {e}{color.RESET}')
 
-def display_all_metadata(args: Args) -> None:
-    for i, image in enumerate(args.image):
-        print_image_header(args, i + 1, image)
-        display_image_metadata(args, image)
+# ---------------------------
+# Metadata deletion
+# ---------------------------
+def build_stripped_file_name(image_path: Path) -> str:
+    dir: str = os.path.dirname(image_path.resolve())
+    ext: str = os.path.splitext(image_path)[-1]
+    name: str = os.path.splitext(image_path)[-2] + '.stripped'
+    return dir + '/' + name + ext
+
+def strip_image_metadata(args: Args, image_path: Path, index: int) -> None:
+    try:
+        with Image.open(image_path) as original:
+            data: list = list(original.getdata())
+            stripped: Any = Image.new(original.mode, original.size)
+            stripped.putdata(data)
+            save_name: str = build_stripped_file_name(image_path)
+            stripped.save(save_name)
+            print_deleting_image_metadata(args, index, image_path, save_name)
+    except Exception as e:
+        print(f'{color.WARNING}Skipping image: {e}{color.RESET}')
 
 # ---------------------------
 # Main
 # ---------------------------
+def process_metadata(args: Args) -> None:
+    for i, image in enumerate(args.image):
+        if args.delete:
+            print_deleting_metadata_header()
+            strip_image_metadata(args, image, i + 1)
+        else:
+            display_image_metadata(args, image, i + 1)
+
 def main() -> None:
     print_header()
     args: Args = parse_args()
-    display_all_metadata(args)
+    process_metadata(args)
     print('{:-^80}'.format(''))
 
 if __name__ == '__main__':
