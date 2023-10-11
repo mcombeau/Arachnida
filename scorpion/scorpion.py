@@ -15,6 +15,7 @@ HEADER = '''
 ███████  ██████  ██████  ██   ██ ██      ██  ██████  ██   ████ 
                                                                
 '''
+SEPARATOR = '------------------------'
 EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
 
 Args = argparse.Namespace
@@ -67,36 +68,35 @@ def parse_args() -> Args:
 # ---------------------------
 # Execution
 # ---------------------------
-def get_image_metadata(image_path: Path) -> dict[str, Any]:
+def display_image_metadata(args: Args, image_path: Path) -> None:
     metadata: dict[str, Any] = {}
-    print(image_path.resolve())
+    metadata['Filename'] = os.path.basename(image_path)
+    metadata['Directory'] = os.path.dirname(image_path.resolve())
+    metadata['File Size'] = humanize.naturalsize(os.path.getsize(image_path), binary=True)
+    metadata['Creation Date'] = time.ctime(os.path.getctime(image_path))
+    metadata['Modification Date'] = time.ctime(os.path.getmtime(image_path))
+    metadata['File Permissions'] = stat.filemode(os.stat(image_path).st_mode)
     try:
         with Image.open(image_path) as image:
-            metadata['Filename'] = os.path.basename(image_path)
-            metadata['Directory'] = os.path.dirname(image_path.resolve())
-            metadata['File Size'] = humanize.naturalsize(os.path.getsize(image_path), binary=True)
-            metadata['Creation Date'] = time.ctime(os.path.getctime(image_path))
-            metadata['Modification Date'] = time.ctime(os.path.getmtime(image_path))
-            metadata['File Permissions'] = stat.filemode(os.stat(image_path).st_mode)
             metadata['Format'] = image.format
             metadata['Mode'] = image.mode
             metadata['Image Width'] = image.width
             metadata['Image Height'] = image.height
-            metadata['------------------------'] = '------------------------'
+            metadata[SEPARATOR] = SEPARATOR
             exifdata: Any = image.getexif()
             for tag_id, value in exifdata.items():
                 tag: str = ExifTags.TAGS.get(tag_id, tag_id)
                 metadata[tag] = value
-        return metadata
+        print_image_metadata(metadata, args.verbose)
     except Exception as e:
+        metadata[SEPARATOR] = SEPARATOR
+        print_image_metadata(metadata, args.verbose)
         print(f'{color.WARNING}Skipping image: {e}{color.RESET}')
-        return metadata
 
 def display_all_metadata(args: Args) -> None:
     for i, image in enumerate(args.image):
         print_image_header(args, i + 1, image)
-        metadata: dict[str, Any] = get_image_metadata(image)
-        print_image_metadata(metadata, args.verbose)
+        display_image_metadata(args, image)
 
 # ---------------------------
 # Main
@@ -105,6 +105,7 @@ def main() -> None:
     print_header()
     args: Args = parse_args()
     display_all_metadata(args)
+    print('{:-^80}'.format(''))
 
 if __name__ == '__main__':
     main()
