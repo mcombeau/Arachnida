@@ -44,12 +44,12 @@ def print_image_header(args: Args, image_number: int, image: Path) -> None:
 
 def print_image_metadata(metadata: dict[str, Any]) -> None:
     for key, value in metadata.items():
-        if type(value) is bytes:
-            try:
-                value = value.decode()
-            except Exception as e:
-                value = f'{color.WARNING}{e}{color.RESET}: ' + str(value)
-        print(f'{key:30}: {value}')
+        try:
+            if type(value) is bytes:
+                value: str = value.decode()
+            print(f'{key:30}: {value}')
+        except Exception as e:
+            continue
 
 # ---------------------------
 # Argument parsing
