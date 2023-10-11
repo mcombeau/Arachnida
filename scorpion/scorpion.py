@@ -42,13 +42,16 @@ def print_image_header(args: Args, image_number: int, image: Path) -> None:
     print(f'[{color.INFO}{image_number}{color.RESET}/{len(args.image)}] Metadata for image: {color.INFO}{image}{color.RESET}')
     print('{:-^80}'.format(''))
 
-def print_image_metadata(metadata: dict[str, Any]) -> None:
+def print_image_metadata(metadata: dict[str, Any], verbose: bool = False) -> None:
     for key, value in metadata.items():
         try:
             if type(value) is bytes:
                 value: str = value.decode()
             print(f'{key:30}: {value}')
         except Exception as e:
+            if verbose:
+                value: str = f'{color.WARNING}{e}{color.RESET}: ' + str(value)
+                print(f'{key:30}: {value}')
             continue
 
 # ---------------------------
@@ -57,6 +60,7 @@ def print_image_metadata(metadata: dict[str, Any]) -> None:
 def parse_args() -> Args:
     parser: Parser = Parser(description = 'An image metadata viewer')
     parser.add_argument('image', type = pathlib.Path, nargs = '+', help = f'image to view EXIF data for. Supported types: {EXTENSIONS}')
+    parser.add_argument('-v', '--verbose', action = 'store_true', default = False, help = 'Enable verbose mode')
     args: Args = parser.parse_args()
     return args
 
@@ -92,7 +96,7 @@ def display_all_metadata(args: Args) -> None:
     for image in args.image:
         print_image_header(args, i, image)
         metadata: dict[str, Any] = get_image_metadata(image)
-        print_image_metadata(metadata)
+        print_image_metadata(metadata, args.verbose)
         i += 1
 
 # ---------------------------
