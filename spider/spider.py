@@ -203,7 +203,6 @@ def download_image(image_url: str, save_dir: str) -> int:
         content: bytes = get_url_content(image_url)
         with open(save_path, 'wb') as f:
             f.write(content)
-            f.close()
             total_downloads += 1
             print(f'{color.SUCCESS}Downloaded image: {save_path}{color.RESET}')
             return 1
