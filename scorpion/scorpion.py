@@ -52,8 +52,9 @@ def print_deleting_metadata_header() -> None:
     print('{:-^80}'.format(''))
 
 def print_deleting_image_metadata(args: Args, image_number: int, image: Path, save: str) -> None:
-    print(f'[{color.INFO}{image_number}{color.RESET}/{len(args.image)}] Deleting metadata for image: {color.INFO}{image}{color.RESET}')
-    print(f'Saving stripped image to: {color.INFO}{save}{color.RESET}')
+    print(f'[{color.INFO}{image_number}{color.RESET}/{len(args.image)}] Deleting metadata for image: {color.INFO}{image.resolve()}{color.RESET}')
+    print(f'Saving stripped image as: {color.INFO}{os.path.basename(save)}{color.RESET}')
+    print('')
 
 def print_image_metadata(metadata: dict[str, Any], verbose: bool = False) -> None:
     for key, value in metadata.items():
@@ -144,9 +145,10 @@ def strip_image_metadata(args: Args, image_path: Path, index: int) -> None:
 # Main
 # ---------------------------
 def process_metadata(args: Args) -> None:
+    if args.delete:
+        print_deleting_metadata_header()
     for i, image in enumerate(args.image):
         if args.delete:
-            print_deleting_metadata_header()
             strip_image_metadata(args, image, i + 1)
         else:
             display_image_metadata(args, image, i + 1)
