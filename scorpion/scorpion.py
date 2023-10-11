@@ -68,12 +68,12 @@ def parse_args() -> Args:
 # Execution
 # ---------------------------
 def get_image_metadata(image_path: Path) -> dict[str, Any]:
-    metadata: dict[str, str] = {}
+    metadata: dict[str, Any] = {}
     print(image_path.resolve())
     try:
         with Image.open(image_path) as image:
-            metadata['Filename'] = os.path.basename(image.filename)
-            metadata['Directory'] = os.path.dirname(image.filename)
+            metadata['Filename'] = os.path.basename(image_path)
+            metadata['Directory'] = os.path.dirname(image_path.resolve())
             metadata['File Size'] = humanize.naturalsize(os.path.getsize(image_path), binary=True)
             metadata['Creation Date'] = time.ctime(os.path.getctime(image_path))
             metadata['Modification Date'] = time.ctime(os.path.getmtime(image_path))
@@ -82,6 +82,7 @@ def get_image_metadata(image_path: Path) -> dict[str, Any]:
             metadata['Mode'] = image.mode
             metadata['Image Width'] = image.width
             metadata['Image Height'] = image.height
+            metadata['------------------------'] = '------------------------'
             exifdata: Any = image.getexif()
             for tag_id, value in exifdata.items():
                 tag: str = ExifTags.TAGS.get(tag_id, tag_id)
@@ -92,12 +93,10 @@ def get_image_metadata(image_path: Path) -> dict[str, Any]:
         return metadata
 
 def display_all_metadata(args: Args) -> None:
-    i: int = 1
-    for image in args.image:
-        print_image_header(args, i, image)
+    for i, image in enumerate(args.image):
+        print_image_header(args, i + 1, image)
         metadata: dict[str, Any] = get_image_metadata(image)
         print_image_metadata(metadata, args.verbose)
-        i += 1
 
 # ---------------------------
 # Main
