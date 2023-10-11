@@ -70,13 +70,13 @@ def parse_args() -> Args:
 # ---------------------------
 def display_image_metadata(args: Args, image_path: Path) -> None:
     metadata: dict[str, Any] = {}
-    metadata['Filename'] = os.path.basename(image_path)
-    metadata['Directory'] = os.path.dirname(image_path.resolve())
-    metadata['File Size'] = humanize.naturalsize(os.path.getsize(image_path), binary=True)
-    metadata['Creation Date'] = time.ctime(os.path.getctime(image_path))
-    metadata['Modification Date'] = time.ctime(os.path.getmtime(image_path))
-    metadata['File Permissions'] = stat.filemode(os.stat(image_path).st_mode)
     try:
+        metadata['Filename'] = os.path.basename(image_path)
+        metadata['Directory'] = os.path.dirname(image_path.resolve())
+        metadata['File Size'] = humanize.naturalsize(os.path.getsize(image_path), binary=True)
+        metadata['Creation Date'] = time.ctime(os.path.getctime(image_path))
+        metadata['Modification Date'] = time.ctime(os.path.getmtime(image_path))
+        metadata['File Permissions'] = stat.filemode(os.stat(image_path).st_mode)
         with Image.open(image_path) as image:
             metadata['Format'] = image.format
             metadata['Mode'] = image.mode
