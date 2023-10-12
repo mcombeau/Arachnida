@@ -1,14 +1,11 @@
 import argparse
+import humanize
 import os
 import pathlib
 import stat
 import time
 import typing
 from PIL import Image, ExifTags
-import humanize
-
-# TODO: Check this out: https://auth0.com/blog/read-edit-exif-metadata-in-photos-with-python/
-# For exif modification and deletion
 
 HEADER = '''
 ███████  ██████  ██████  ██████  ██████  ██  ██████  ███    ██ 
