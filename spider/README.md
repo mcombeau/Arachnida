@@ -4,6 +4,11 @@ Spider is a small image-scraping script in Python. Downloads `.jpg`, `.jpeg`, `.
 
 This bot respects `robots.txt`. This program was made for educational purposes, please do not use it for malicious ones.
 
+## Requirements
+
+- Python3
+- BeautifulSoup
+
 ## Usage
 
 Clone this repository and `cd` into `Arachnida/spider`.
