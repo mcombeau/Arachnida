@@ -2,7 +2,7 @@
 
 Spider is a small image-scraping script in Python. Downloads `.jpg`, `.jpeg`, `.png`, `.gif`, and `.bmp` images from a given URL, recursively.
 
-This bot respects `robots.txt`. This program was made for educational purposes, please do not use it for malicious ones.
+This bot complies with the targeted website's `robots.txt` directives. This program was made for educational purposes, please do not use it for malicious ones.
 
 ## Requirements
 
