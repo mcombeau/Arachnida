@@ -20,7 +20,7 @@ python3 scorpion.py [-d/--delete][-v/--verbose] image [image...]
 The options are as follows:
 
 - `image` (one required): Path to an image (or several space-separated images) for which to view/delete metadata.
-- `-d` (optional): Enable deletion mode: a copy of the image will be created, without any metadata.
+- `-d` (optional): Enable deletion mode: a copy of the image will be created, stripped of all of its exif data.
 - `-h`: Display the help page.
 - `-v`: Enable verbose mode.
 
