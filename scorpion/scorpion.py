@@ -19,7 +19,6 @@ HEADER = '''
                                                                
 '''
 SEPARATOR = '{:^30}'.format('---')
-EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
 
 Args = argparse.Namespace
 Parser = argparse.ArgumentParser
@@ -83,9 +82,9 @@ def print_image_metadata(metadata: dict[str, Any], verbose: bool = False) -> Non
 # ---------------------------
 def parse_args() -> Args:
     parser: Parser = Parser(description = 'An image metadata viewer')
-    parser.add_argument('image', type = pathlib.Path, nargs = '+', help = f'image to view EXIF data for. Supported types: {EXTENSIONS}')
+    parser.add_argument('image', type = pathlib.Path, nargs = '+', help = f'image to view EXIF data for.')
     parser.add_argument('-d', '--delete', action = 'store_true', default = False, help = 'delete all exif data from image(s)')
-    parser.add_argument('-v', '--verbose', action = 'store_true', default = False, help = 'Enable verbose mode')
+    parser.add_argument('-v', '--verbose', action = 'store_true', default = False, help = 'enable verbose mode')
     args: Args = parser.parse_args()
     return args
 
