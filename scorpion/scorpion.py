@@ -56,16 +56,26 @@ def print_deleting_image_metadata(args: Args, image_number: int, image: Path, sa
     print(f'Saving stripped image as: {color.INFO}{os.path.basename(save)}{color.RESET}')
     print('')
 
+def print_metadata_value(key: str, value: Any, verbose: bool = False) -> None:
+    if verbose and (isinstance(value, str) or isinstance(value, bytes)):
+        if isinstance(value, str) and not value.isprintable():
+            value = repr(value)
+    print(f'{key:30}: {value}')
+
 def print_image_metadata(metadata: dict[str, Any], verbose: bool = False) -> None:
     for key, value in metadata.items():
         try:
-            if type(value) is bytes:
-                value: str = value.decode()
-            print(f'{key:30}: {value}')
+            if isinstance(value, bytes):
+                value: str = value.decode('utf-8')
+                if verbose and all(c in '\x00' for c in value):
+                    raise Exception('value contains only NULL bytes')
+                if not verbose and not value.isprintable():
+                    value: str = ''
+            print_metadata_value(key, value, verbose)
         except Exception as e:
             if verbose:
-                value: str = f'{color.WARNING}{e}{color.RESET}: ' + str(value)
-                print(f'{key:30}: {value}')
+                warn: str = f'{color.WARNING}{e}{color.RESET}'
+                print(f'{key:30}: {warn} : {repr(value)}')
             continue
 
 # ---------------------------
