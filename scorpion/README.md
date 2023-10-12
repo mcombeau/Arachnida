@@ -1,6 +1,6 @@
 # Scorpion
 
-Scorpion is a small image metadata viewing script in Python. It can display and delte the exif data of the specified image(s).
+Scorpion is a small image metadata viewing script in Python. It can display and delete the exif data of the specified image(s).
 
 ## Requirements
 
